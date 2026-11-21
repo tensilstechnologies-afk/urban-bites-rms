@@ -91,13 +91,17 @@ export function InventoryView() {
   const [adjust, setAdjust] = useState<number | null>(null)
   const [qty, setQty] = useState(0)
   const [reason, setReason] = useState('Purchase')
+  const [newIng, setNewIng] = useState<null | { name: string; qty: number; unit: string; minLevel: number; unitCost: number; expiry: string }>(null)
   const cur = db.settings.currency
   const totalValue = db.ingredients.reduce((s, i) => s + i.qty * i.unitCost, 0)
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap justify-between items-center gap-3">
         <h1 className="text-2xl font-extrabold">Inventory</h1>
-        <span className="chip" style={{ background: 'var(--surface2)' }}>Total value: <b>{fmt(totalValue, cur)}</b></span>
+        <div className="flex gap-2 items-center">
+          <span className="chip" style={{ background: 'var(--surface2)' }}>Total value: <b>{fmt(totalValue, cur)}</b></span>
+          <button className="btn btn-primary" onClick={() => setNewIng({ name: '', qty: 0, unit: 'kg', minLevel: 0, unitCost: 0, expiry: '' })}>+ Add ingredient</button>
+        </div>
       </div>
       <div className="card overflow-x-auto">
         <table className="w-full text-sm min-w-[680px]">
@@ -133,6 +137,27 @@ export function InventoryView() {
           </div>
         ))}
       </div>
+      {newIng && (
+        <Modal title="Add ingredient" onClose={() => setNewIng(null)}>
+          <div className="space-y-3">
+            <div><div className="label">Name</div><input className="input" value={newIng.name} onChange={e => setNewIng({ ...newIng, name: e.target.value })} placeholder="e.g. Tomatoes" /></div>
+            <div className="grid grid-cols-2 gap-2">
+              <div><div className="label">Opening stock</div><input type="number" step="0.1" className="input" value={newIng.qty} onChange={e => setNewIng({ ...newIng, qty: Number(e.target.value) })} /></div>
+              <div><div className="label">Unit</div><select className="input" value={newIng.unit} onChange={e => setNewIng({ ...newIng, unit: e.target.value })}>{['kg', 'L', 'pcs', 'g', 'pack'].map(u => <option key={u}>{u}</option>)}</select></div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div><div className="label">Min level (low-stock alert)</div><input type="number" step="0.1" className="input" value={newIng.minLevel} onChange={e => setNewIng({ ...newIng, minLevel: Number(e.target.value) })} /></div>
+              <div><div className="label">Unit cost ({cur})</div><input type="number" className="input" value={newIng.unitCost} onChange={e => setNewIng({ ...newIng, unitCost: Number(e.target.value) })} /></div>
+            </div>
+            <div><div className="label">Expiry date (optional)</div><input type="date" className="input" value={newIng.expiry} onChange={e => setNewIng({ ...newIng, expiry: e.target.value })} /></div>
+            <button className="btn btn-primary w-full" onClick={() => {
+              if (!newIng.name.trim()) return
+              update(d => ({ ...d, ingredients: [...d.ingredients, { id: Math.max(...d.ingredients.map(i => i.id)) + 1, name: newIng.name.trim(), qty: newIng.qty, unit: newIng.unit, minLevel: newIng.minLevel, unitCost: newIng.unitCost, expiry: newIng.expiry || null }] }), `Ingredient ${newIng.name} added`)
+              setNewIng(null)
+            }}>Save ingredient</button>
+          </div>
+        </Modal>
+      )}
       {adjust !== null && (
         <Modal title={`Adjust stock — ${db.ingredients.find(i => i.id === adjust)?.name}`} onClose={() => setAdjust(null)}>
           <div className="space-y-3">
@@ -164,12 +189,16 @@ export function SuppliersView() {
   const [supId, setSupId] = useState(1)
   const [items, setItems] = useState('')
   const [total, setTotal] = useState(0)
+  const [newSup, setNewSup] = useState<null | { name: string; contact: string; phone: string; email: string }>(null)
   const cur = db.settings.currency
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap justify-between items-center gap-3">
         <h1 className="text-2xl font-extrabold">Suppliers & Purchases</h1>
-        <button className="btn btn-primary" onClick={() => setPo(true)}>+ New purchase order</button>
+        <div className="flex gap-2">
+          <button className="btn btn-primary" onClick={() => setNewSup({ name: '', contact: '', phone: '', email: '' })}>+ Add supplier</button>
+          <button className="btn btn-primary" onClick={() => setPo(true)}>+ New purchase order</button>
+        </div>
       </div>
       <div className="grid md:grid-cols-2 gap-3">
         {db.suppliers.map(s => (
@@ -189,6 +218,21 @@ export function SuppliersView() {
           </div>
         ))}
       </div>
+      {newSup && (
+        <Modal title="Add supplier" onClose={() => setNewSup(null)}>
+          <div className="space-y-3">
+            <div><div className="label">Supplier / company name</div><input className="input" value={newSup.name} onChange={e => setNewSup({ ...newSup, name: e.target.value })} /></div>
+            <div><div className="label">Contact person</div><input className="input" value={newSup.contact} onChange={e => setNewSup({ ...newSup, contact: e.target.value })} /></div>
+            <div><div className="label">Phone</div><input className="input" value={newSup.phone} onChange={e => setNewSup({ ...newSup, phone: e.target.value })} /></div>
+            <div><div className="label">Email</div><input className="input" value={newSup.email} onChange={e => setNewSup({ ...newSup, email: e.target.value })} /></div>
+            <button className="btn btn-primary w-full" onClick={() => {
+              if (!newSup.name.trim()) return
+              update(d => ({ ...d, suppliers: [...d.suppliers, { id: Math.max(...d.suppliers.map(s => s.id)) + 1, name: newSup.name.trim(), contact: newSup.contact, phone: newSup.phone, email: newSup.email, balance: 0 }] }), `Supplier ${newSup.name} added`)
+              setNewSup(null)
+            }}>Save supplier</button>
+          </div>
+        </Modal>
+      )}
       {po && (
         <Modal title="New purchase order" onClose={() => setPo(false)}>
           <div className="space-y-3">

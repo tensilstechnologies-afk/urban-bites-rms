@@ -9,6 +9,9 @@ export function TablesView() {
   const { db, update } = useStore()
   const [floor, setFloor] = useState('Main Hall')
   const [sel, setSel] = useState<Table | null>(null)
+  const [newTable, setNewTable] = useState<null | { label: string; floor: string; capacity: number; waiterId: number | null }>(null)
+  const [newRes, setNewRes] = useState<null | { customer: string; tableLabel: string; date: string; time: string; guests: number }>(null)
+  const today = new Date().toISOString().slice(0, 10)
   const tables = db.tables.filter(t => t.floor === floor)
   const color: Record<string, string> = {
     available: '#15803d', occupied: '#b91c1c', reserved: '#b45309', waiting_food: '#92400e',
@@ -22,6 +25,7 @@ export function TablesView() {
           {['Main Hall', 'Family Hall'].map(f => (
             <button key={f} className={`btn ${floor === f ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setFloor(f)}>{f}</button>
           ))}
+          <button className="btn btn-primary" onClick={() => setNewTable({ label: `T${db.tables.length + 1}`, floor, capacity: 4, waiterId: null })}>+ Add table</button>
         </div>
       </div>
       <div className="flex gap-3 flex-wrap text-xs">
@@ -42,7 +46,10 @@ export function TablesView() {
         ))}
       </div>
       <div className="card p-4">
-        <h3 className="font-bold mb-2">Reservations</h3>
+        <div className="flex flex-wrap justify-between items-center gap-2 mb-2">
+          <h3 className="font-bold">Reservations</h3>
+          <button className="btn btn-primary !py-1" onClick={() => setNewRes({ customer: '', tableLabel: db.tables[0]?.label || '', date: today, time: '19:00', guests: 2 })}>+ New reservation</button>
+        </div>
         {db.reservations.map(r => (
           <div key={r.id} className="flex flex-wrap justify-between gap-2 text-sm py-1.5 border-b last:border-0" style={{ borderColor: 'var(--border)' }}>
             <span><b>{r.customer}</b> · {r.tableLabel} · {r.date} {r.time} · {r.guests} guests</span>
@@ -53,6 +60,40 @@ export function TablesView() {
           </div>
         ))}
       </div>
+      {newTable && (
+        <Modal title="Add table" onClose={() => setNewTable(null)}>
+          <div className="space-y-3">
+            <div><div className="label">Table label</div><input className="input" value={newTable.label} onChange={e => setNewTable({ ...newTable, label: e.target.value })} placeholder="e.g. T13" /></div>
+            <div><div className="label">Floor</div><select className="input" value={newTable.floor} onChange={e => setNewTable({ ...newTable, floor: e.target.value })}>{['Main Hall', 'Family Hall'].map(f => <option key={f} value={f}>{f}</option>)}</select></div>
+            <div><div className="label">Seats (capacity)</div><input type="number" min={1} className="input" value={newTable.capacity} onChange={e => setNewTable({ ...newTable, capacity: Number(e.target.value) })} /></div>
+            <div><div className="label">Waiter (optional)</div><select className="input" value={newTable.waiterId ?? ''} onChange={e => setNewTable({ ...newTable, waiterId: e.target.value ? Number(e.target.value) : null })}><option value="">Unassigned</option>{db.users.filter(u => u.role === 'waiter').map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select></div>
+            <button className="btn btn-primary w-full" onClick={() => {
+              if (!newTable.label.trim()) return
+              const onFloor = db.tables.filter(t => t.floor === newTable.floor).length
+              update(d => ({ ...d, tables: [...d.tables, { id: Math.max(...d.tables.map(t => t.id)) + 1, label: newTable.label.trim(), floor: newTable.floor, capacity: Math.max(1, newTable.capacity), status: 'available' as const, waiterId: newTable.waiterId, x: 5 + (onFloor % 4) * 24, y: 8 + Math.floor(onFloor / 4) * 30 }] }), `Table ${newTable.label} added (${newTable.floor})`)
+              setNewTable(null)
+            }}>Save table</button>
+          </div>
+        </Modal>
+      )}
+      {newRes && (
+        <Modal title="New reservation" onClose={() => setNewRes(null)}>
+          <div className="space-y-3">
+            <div><div className="label">Customer name</div><input className="input" value={newRes.customer} onChange={e => setNewRes({ ...newRes, customer: e.target.value })} /></div>
+            <div><div className="label">Table</div><select className="input" value={newRes.tableLabel} onChange={e => setNewRes({ ...newRes, tableLabel: e.target.value })}>{db.tables.map(t => <option key={t.id} value={t.label}>{t.label} · {t.floor} ({t.capacity} seats)</option>)}</select></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><div className="label">Date</div><input type="date" className="input" value={newRes.date} onChange={e => setNewRes({ ...newRes, date: e.target.value })} /></div>
+              <div><div className="label">Time</div><input type="time" className="input" value={newRes.time} onChange={e => setNewRes({ ...newRes, time: e.target.value })} /></div>
+            </div>
+            <div><div className="label">Guests</div><input type="number" min={1} className="input" value={newRes.guests} onChange={e => setNewRes({ ...newRes, guests: Number(e.target.value) })} /></div>
+            <button className="btn btn-primary w-full" onClick={() => {
+              if (!newRes.customer.trim()) return
+              update(d => ({ ...d, reservations: [...d.reservations, { id: Math.max(0, ...d.reservations.map(r => r.id)) + 1, customer: newRes.customer.trim(), tableLabel: newRes.tableLabel, date: newRes.date, time: newRes.time, guests: Math.max(1, newRes.guests), status: 'Pending' }] }), `Reservation for ${newRes.customer} on ${newRes.tableLabel}`)
+              setNewRes(null)
+            }}>Save reservation</button>
+          </div>
+        </Modal>
+      )}
       {sel && (
         <Modal title={`Table ${sel.label}`} onClose={() => setSel(null)}>
           <p className="text-sm mb-3" style={{ color: 'var(--muted)' }}>{sel.floor} · {sel.capacity} seats · Waiter: {sel.waiterId ? db.users.find(u => u.id === sel.waiterId)?.name : 'Unassigned'}</p>
