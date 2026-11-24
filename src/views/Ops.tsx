@@ -1,9 +1,43 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import QRCode from 'qrcode'
 import { fmt, KITCHEN_FLOW, timeAgo, useStore } from '../store'
 import { Empty, FoodImg, Modal, SearchInput, StatusChip } from '../components'
 import type { KitchenStatus, Table } from '../types'
 
 const TABLE_STATUS = ['available', 'occupied', 'reserved', 'waiting_food', 'served', 'payment_pending', 'cleaning'] as const
+
+/** Kitchen bell — Web Audio API, no audio file needed. */
+export function ringBell() {
+  try {
+    const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+    const ctx = new AC()
+    const now = ctx.currentTime
+    ;[0, 0.35, 0.7].forEach((delay, i) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.value = i === 2 ? 1568 : 1047
+      gain.gain.setValueAtTime(0.0001, now + delay)
+      gain.gain.exponentialRampToValueAtTime(0.25, now + delay + 0.02)
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + delay + 0.3)
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start(now + delay)
+      osc.stop(now + delay + 0.35)
+    })
+  } catch { /* audio unavailable — banner still shows */ }
+}
+
+/** Print a clean QR card for one table (opens a print-only window). */
+function printQr(label: string, dataUrl: string) {
+  const url = `https://urban-bites-rms.vercel.app/?table=${encodeURIComponent(label)}`
+  const w = window.open('', '_blank')
+  if (!w) return
+  w.document.write(`<html><head><title>Table ${label} — QR code</title></head><body style="text-align:center;font-family:sans-serif;padding:40px"><h1 style="font-size:32px">🍔 Urban Bites — Table ${label}</h1><img src="${dataUrl}" style="width:320px;height:320px"><p style="font-size:18px">Scan to order from your phone — no waiter needed</p><p style="color:#666">${url}</p></body></html>`)
+  w.document.close()
+  w.focus()
+  w.print()
+}
 
 export function TablesView() {
   const { db, update } = useStore()
@@ -11,7 +45,14 @@ export function TablesView() {
   const [sel, setSel] = useState<Table | null>(null)
   const [newTable, setNewTable] = useState<null | { label: string; floor: string; capacity: number; waiterId: number | null }>(null)
   const [newRes, setNewRes] = useState<null | { customer: string; tableLabel: string; date: string; time: string; guests: number }>(null)
+  const [qrTable, setQrTable] = useState<Table | null>(null)
+  const [qrUrl, setQrUrl] = useState('')
   const today = new Date().toISOString().slice(0, 10)
+  useEffect(() => {
+    if (!qrTable) { setQrUrl(''); return }
+    const url = `https://urban-bites-rms.vercel.app/?table=${encodeURIComponent(qrTable.label)}`
+    QRCode.toDataURL(url, { width: 512, margin: 2 }).then(setQrUrl).catch(() => setQrUrl(''))
+  }, [qrTable])
   const tables = db.tables.filter(t => t.floor === floor)
   const color: Record<string, string> = {
     available: '#15803d', occupied: '#b91c1c', reserved: '#b45309', waiting_food: '#92400e',
@@ -33,8 +74,9 @@ export function TablesView() {
       </div>
       <div className="card p-4 relative min-h-[320px] anim-fade-up" style={{ background: 'var(--surface2)' }}>
         {tables.map(t => (
-          <button key={t.id} onClick={() => setSel(t)}
-            className="absolute card card-hover p-3 text-center anim-pop"
+          <div key={t.id} onClick={() => setSel(t)} role="button" tabIndex={0}
+            onKeyDown={e => { if (e.key === 'Enter') setSel(t) }}
+            className="absolute card card-hover p-3 text-center anim-pop cursor-pointer"
             style={{ left: `${t.x}%`, top: `${t.y}%`, width: '20%', borderColor: color[t.status], borderWidth: 2 }}>
             <div className="font-extrabold text-lg">{t.label}</div>
             <div className="text-xs" style={{ color: 'var(--muted)' }}>{t.capacity} seats</div>
@@ -42,7 +84,8 @@ export function TablesView() {
             <div className="text-[11px] mt-1" style={{ color: 'var(--muted)' }}>
               {t.waiterId ? db.users.find(u => u.id === t.waiterId)?.name.split(' ')[0] : '—'}
             </div>
-          </button>
+            <button className="btn btn-ghost !py-0.5 !px-2 text-xs mt-1" onClick={e => { e.stopPropagation(); setQrTable(t) }}>📱 QR code</button>
+          </div>
         ))}
       </div>
       <div className="card p-4">
@@ -97,6 +140,7 @@ export function TablesView() {
       {sel && (
         <Modal title={`Table ${sel.label}`} onClose={() => setSel(null)}>
           <p className="text-sm mb-3" style={{ color: 'var(--muted)' }}>{sel.floor} · {sel.capacity} seats · Waiter: {sel.waiterId ? db.users.find(u => u.id === sel.waiterId)?.name : 'Unassigned'}</p>
+          <button className="btn btn-primary !py-1 mb-3" onClick={() => setQrTable(sel)}>📱 Show QR code for this table</button>
           <div className="label mb-1">Change status</div>
           <div className="flex gap-2 flex-wrap mb-4">{TABLE_STATUS.map(s => (
             <button key={s} className={`btn ${sel.status === s ? 'btn-primary' : 'btn-ghost'}`} onClick={() => {
@@ -113,6 +157,18 @@ export function TablesView() {
           {db.orders.filter(o => o.tableLabel === sel.label).length === 0 && <p className="text-sm" style={{ color: 'var(--muted)' }}>No orders yet on this table.</p>}
         </Modal>
       )}
+      {qrTable && (
+        <Modal title={`QR code — Table ${qrTable.label}`} onClose={() => setQrTable(null)}>
+          <div className="text-center space-y-3">
+            {qrUrl
+              ? <img src={qrUrl} alt={`QR code for Table ${qrTable.label}`} className="w-64 h-64 mx-auto rounded-xl" />
+              : <p className="text-sm" style={{ color: 'var(--muted)' }}>Generating QR code…</p>}
+            <p className="text-sm break-all" style={{ color: 'var(--muted)' }}>https://urban-bites-rms.vercel.app/?table={qrTable.label}</p>
+            <p className="text-xs" style={{ color: 'var(--muted)' }}>Print this and place it on Table {qrTable.label}. Customers scan it to order from their phones — no waiter needed. Each table's QR orders for that table only.</p>
+            <button className="btn btn-primary w-full" disabled={!qrUrl} onClick={() => printQr(qrTable.label, qrUrl)}>🖨 Print QR code</button>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }
@@ -125,6 +181,23 @@ export function KDSView() {
     o.status !== 'cancelled' && o.kitchenStatus !== 'completed' && o.kitchenStatus !== 'served' &&
     (station === 'All' || o.items.some(it => db.products.find(p => p.id === it.productId)?.station === station))
   ), [db.orders, db.products, station])
+
+  // Kitchen bell: ring + flash a banner only when a NEW order arrives.
+  const newOrders = db.orders.filter(o => o.status !== 'cancelled' && o.kitchenStatus === 'new')
+  const newCount = newOrders.length
+  const prevNewCount = useRef(newCount)
+  const [bellFlash, setBellFlash] = useState(false)
+  const latestNew = newOrders[0]
+  useEffect(() => {
+    if (newCount > prevNewCount.current) {
+      ringBell()
+      setBellFlash(true)
+      const t = window.setTimeout(() => setBellFlash(false), 10000)
+      prevNewCount.current = newCount
+      return () => window.clearTimeout(t)
+    }
+    prevNewCount.current = newCount
+  }, [newCount])
 
   function advance(oId: number, current: KitchenStatus) {
     const idx = KITCHEN_FLOW.indexOf(current)
@@ -139,10 +212,18 @@ export function KDSView() {
     <div className="space-y-4">
       <div className="flex flex-wrap justify-between items-center gap-3">
         <h1 className="text-2xl font-extrabold">Kitchen Display <span className="chip ml-2" style={{ background: '#b91c1c1e', color: 'var(--red)' }}><span className="live-dot">●</span> LIVE</span></h1>
-        <div className="flex gap-2 flex-wrap">{stations.map(s => (
-          <button key={s} className={`btn ${station === s ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setStation(s)}>{s}</button>
-        ))}</div>
+        <div className="flex gap-2 flex-wrap">
+          <button className="btn btn-ghost" onClick={ringBell} title="Play the kitchen bell (also enables sound for this session)">🔔 Test bell</button>
+          {stations.map(s => (
+            <button key={s} className={`btn ${station === s ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setStation(s)}>{s}</button>
+          ))}
+        </div>
       </div>
+      {bellFlash && latestNew && (
+        <div className="p-4 rounded-xl text-white font-extrabold text-center anim-flash">
+          🔔 New order from Table {latestNew.tableLabel || '—'}! {latestNew.number} · {latestNew.customerName} — somebody has ordered.
+        </div>
+      )}
       {active.length === 0 && <Empty text="No active kitchen tickets. New POS / online orders will appear here live." />}
       <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
         {active.map(o => (

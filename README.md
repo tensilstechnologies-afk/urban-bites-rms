@@ -13,6 +13,12 @@ A complete, working restaurant management system for the fictional **Urban Bites
 
 A `vercel.json` is included with the SPA fallback rewrite.
 
+## Waiter-less QR table ordering
+
+Each table has a QR code (Tables → click a table → **QR code**, or the **QR code** button on a table card). Print it and place it on the table. A customer scans it and opens `https://urban-bites-rms.vercel.app/?table=T3` (table-specific — Table 3's QR orders for Table 3 only), orders from their phone with no login, and tracks the order live: received → accepted → preparing → ready → delivered, with an ETA from the longest prep time of the ordered items. Adding more items merges into the same open bill. The kitchen (KDS) rings a bell and flashes "New order from Table …" whenever a new order arrives; the kitchen accepts / advances it with the normal KDS flow.
+
+**Limitation:** QR ordering works end-to-end on one device/browser today — all data lives in that browser's `localStorage`. A customer's phone and the kitchen screen do **not** sync with each other yet; live phone-to-kitchen sync across different devices needs a shared database/backend (next step, not this build). For a live demo, open the guest page and the KDS in two tabs of the same browser.
+
 ## Run locally
 
 ```bash

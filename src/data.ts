@@ -55,6 +55,7 @@ export const PRODUCTS: Product[] = [
   { id: 32, name: 'Gulab Jamun (4 pcs)', categoryId: 11, price: 320, costPrice: 120, description: 'Warm khoya dumplings in rose syrup.', image: u('photo-1551024506-0bccd828d307'), prepMins: 4, station: 'Desi Kitchen', dietary: 'Vegetarian', available: true, sku: 'UB-GULA-320', featured: false, variations: [], recipe: [] },
   { id: 33, name: 'Special Kulfa', categoryId: 11, price: 350, costPrice: 140, description: 'Dense traditional kulfa with pistachio dust.', image: u('photo-1488477181946-6428a0291777'), prepMins: 3, station: 'Beverages', dietary: 'Vegetarian', available: true, sku: 'UB-SPEC-350', featured: false, variations: [], recipe: [] },
   { id: 34, name: 'Royal Falooda', categoryId: 11, price: 600, costPrice: 260, description: 'Rose milk, vermicelli, basil seeds, kulfa and jelly.', image: u('photo-1563805042-7684c019e1cb'), prepMins: 6, station: 'Beverages', dietary: '', available: true, sku: 'UB-ROYA-600', featured: false, variations: [], recipe: [] },
+  { id: 35, name: 'Mineral Water', categoryId: 10, price: 150, costPrice: 60, description: 'Chilled 500ml mineral water bottle.', image: u('photo-1523362628745-0c100150b504'), prepMins: 2, station: 'Beverages', dietary: '', available: true, sku: 'UB-WATE-150', featured: false, variations: [], recipe: [] },
 ]
 
 export const MODIFIERS: Modifier[] = [

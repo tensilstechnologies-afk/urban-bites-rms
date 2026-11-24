@@ -8,6 +8,7 @@ import { InventoryView, MenuView, SuppliersView } from './views/Manage'
 import { CustomersView, StaffView } from './views/People'
 import { AuditView, ExpensesView, NotificationsView, ReportsView, SettingsView } from './views/Finance'
 import Storefront from './views/Storefront'
+import GuestOrder from './views/GuestOrder'
 import type { Role } from './types'
 
 type View = 'dashboard' | 'pos' | 'orders' | 'kitchen' | 'tables' | 'menu' | 'inventory' | 'suppliers' | 'customers' | 'staff' | 'expenses' | 'reports' | 'notifications' | 'settings' | 'audit' | 'storefront'
@@ -151,6 +152,10 @@ function Shell({ guest, onExitGuest }: { guest: boolean; onExitGuest: () => void
 function AppInner() {
   const { user } = useStore()
   const [guest, setGuest] = useState(false)
+  // Waiter-less QR ordering: ?table=T3 opens the guest ordering page for
+  // that table only — no login required.
+  const tableParam = useMemo(() => new URLSearchParams(window.location.search).get('table'), [])
+  if (tableParam) return <GuestOrder tableLabel={tableParam} />
   if (!user && !guest) return <Login onGuest={() => setGuest(true)} />
   return <Shell guest={guest} onExitGuest={() => setGuest(false)} />
 }
