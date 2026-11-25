@@ -43,7 +43,21 @@ function seedDB(): DB {
 function loadDB(): DB {
   try {
     const raw = localStorage.getItem(KEY)
-    if (raw) return JSON.parse(raw) as DB
+    if (raw) {
+      const saved = JSON.parse(raw) as DB
+      // Merge in any seed items added by a newer deploy (e.g. new menu
+      // products) so returning browsers get them without losing orders.
+      const seed = seedDB()
+      const missing = <T extends { id: number }>(have: T[], fresh: T[]) =>
+        fresh.filter(f => !have.some(h => h.id === f.id))
+      return {
+        ...saved,
+        products: [...saved.products, ...missing(saved.products, seed.products)],
+        categories: [...saved.categories, ...missing(saved.categories, seed.categories)],
+        modifiers: [...saved.modifiers, ...missing(saved.modifiers, seed.modifiers)],
+        ingredients: [...saved.ingredients, ...missing(saved.ingredients, seed.ingredients)],
+      }
+    }
   } catch { /* ignore */ }
   return seedDB()
 }
